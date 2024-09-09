@@ -1,6 +1,5 @@
 use std::{
-    sync::{mpsc, Arc, Mutex},
-    thread,
+    sync::{mpsc, Arc, Mutex}, thread
 };
 
 pub struct ThreadPool {
@@ -17,19 +16,13 @@ struct Worker {
 
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        
         let thread = thread::spawn(move || loop {
             let job = receiver.lock().unwrap().recv().unwrap();
 
-            println!("Worker {id} got a job. Executing!");
-
             job();
         });
-        
-        Worker {
-            id,
-            thread
-        }
+
+        Worker { id, thread }
     }
 }
 
@@ -64,5 +57,24 @@ impl ThreadPool {
         let job = Box::new(f);
 
         self.sender.send(job).unwrap();
+    }
+}
+
+#[derive(Debug)]
+pub struct Request<'a> {
+    pub method: &'a str,
+    pub path: &'a str,
+    pub http_version: &'a str,
+}
+
+impl <'a> Request<'a> {
+    pub fn new(status_line: &'a str) -> Request {
+        let v: Vec<&str> = status_line.rsplit(" ").collect();
+
+        Request {
+            method: v[2],
+            path: v[1],
+            http_version: v[0],
+        }
     }
 }
