@@ -1,5 +1,8 @@
 use std::{
-    sync::{mpsc, Arc, Mutex}, thread
+    collections::HashMap,
+    fs,
+    sync::{mpsc, Arc, Mutex},
+    thread,
 };
 
 pub struct ThreadPool {
@@ -67,7 +70,7 @@ pub struct Request<'a> {
     pub http_version: &'a str,
 }
 
-impl <'a> Request<'a> {
+impl<'a> Request<'a> {
     pub fn new(status_line: &'a str) -> Request {
         let v: Vec<&str> = status_line.rsplit(" ").collect();
 
@@ -76,5 +79,30 @@ impl <'a> Request<'a> {
             path: v[1],
             http_version: v[0],
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct App {
+    pub paths: HashMap<String, String>,
+}
+
+impl App {
+    pub fn new() -> App {
+        let mut paths: HashMap<String, String> = HashMap::new();
+
+        if let Ok(files) = fs::read_dir("./pages") {
+            for file in files {
+                if let Ok(entry) = file {
+                    if let Some(file_name) = entry.file_name().to_str() {
+                        if let Some(file_path) = entry.path().to_str() {
+                            paths.insert(file_path.to_string()[1..].to_string(), file_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        App { paths }
     }
 }

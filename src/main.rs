@@ -1,12 +1,16 @@
 use std::{
-    fs, io::{prelude::*, BufReader}, net::{TcpListener, TcpStream}, thread, time::{Duration, SystemTime}
+    fs, io::{prelude::*, BufReader}, net::{TcpListener, TcpStream}, time::SystemTime
 };
 
-use http_client::{ThreadPool, Request};
+use http_client::{ThreadPool, Request, App};
 
 fn main() {
     let listener: TcpListener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let pool = ThreadPool::new(4);
+
+    let app = App::new();
+
+    println!("{:?}", app);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -26,6 +30,7 @@ fn handle_connection(mut stream: TcpStream) {
     let (status_line, filname) = match req.method {
         "GET" => match req.path {
             "/" => ("HTTP/1.1 200 OK", "pages/index.html"),
+            "/styles/index.css" => ("HTTP/1.1 200 OK", "styles/index.css"),
             _ => ("HTTP/1.1 404 NOT FOUND", "pages/404.html")
         },
         "POST" => match req.path {
