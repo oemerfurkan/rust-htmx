@@ -1,8 +1,11 @@
 use std::{
     collections::HashMap,
     fs,
+    io::{prelude::*, BufReader},
+    net::TcpStream,
     sync::{mpsc, Arc, Mutex},
     thread,
+    time::SystemTime,
 };
 
 pub struct ThreadPool {
@@ -91,18 +94,84 @@ impl App {
     pub fn new() -> App {
         let mut paths: HashMap<String, String> = HashMap::new();
 
-        if let Ok(files) = fs::read_dir("./pages") {
-            for file in files {
-                if let Ok(entry) = file {
-                    if let Some(file_name) = entry.file_name().to_str() {
-                        if let Some(file_path) = entry.path().to_str() {
-                            paths.insert(file_path.to_string()[1..].to_string(), file_name.to_string());
-                        }
+        if let Ok(folders) = fs::read_dir(".") {
+            folders
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    let file_name = entry.file_name();
+                    let file_name_str = file_name.to_string_lossy();
+
+                    file_name_str != "src"
+                        && file_name_str != "target"
+                        && !file_name_str.contains(".")
+                })
+                .for_each(|folder| {
+                    let folder_path = folder.path();
+
+                    if let Ok(files) = fs::read_dir(&folder_path) {
+                        files
+                            .filter_map(|file_entry| file_entry.ok())
+                            .for_each(|file_entry| {
+                                if let Some(file_name) = file_entry.file_name().to_str() {
+                                    let file_path = file_entry.path();
+                                    if let Some(file_path_str) = file_path.to_str() {
+                                        paths.insert(
+                                            format!("/{}", file_name),
+                                            file_path_str.to_string(),
+                                        );
+                                    }
+                                }
+                            });
                     }
-                }
-            }
+                });
         }
 
         App { paths }
+    }
+
+    pub fn handle_request(&self, mut stream: TcpStream) {
+        let start = SystemTime::now();
+
+        let buf_reader = BufReader::new(&mut stream);
+
+        let request_line = buf_reader.lines().next().unwrap().unwrap();
+
+        let req = Request::new(&request_line);
+
+        if let Some(filename) = self.paths.get(req.path) {
+            let contents = fs::read_to_string(filename).unwrap();
+            let length = contents.len();
+
+            let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {length}\r\n\r\n{contents}");
+            stream.write_all(response.as_bytes()).unwrap();
+
+            let end = SystemTime::now();
+
+            let diff = end.duration_since(start).unwrap();
+            println!(
+                "{} {} {} - {}ms",
+                req.method,
+                req.path,
+                req.http_version,
+                diff.as_millis()
+            );
+        } else {
+            let contents = fs::read_to_string("./pages/404.html").unwrap();
+            let length = contents.len();
+
+            let response = format!("HTTP/1.1 404 NOT FOUND\r\nContent-Length: {length}\r\n\r\n{contents}");
+            stream.write_all(response.as_bytes()).unwrap();
+
+            let end = SystemTime::now();
+
+            let diff = end.duration_since(start).unwrap();
+            println!(
+                "{} {} {} - {}ms",
+                req.method,
+                req.path,
+                req.http_version,
+                diff.as_millis()
+            );
+        }
     }
 }
